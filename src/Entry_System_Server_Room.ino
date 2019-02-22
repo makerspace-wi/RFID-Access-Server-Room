@@ -39,32 +39,32 @@ int bufferCount;    // Anzahl der eingelesenen Zeichen
 char buffer[10];    // Serial Input-Buffer
 
 void setup() {
-  Serial.begin(9600);
-  wg.begin();   // start Wiegand Bus Control
+        Serial.begin(9600);
+        wg.begin(); // start Wiegand Bus Control
 
-  pinMode(DATA0, INPUT);
-  pinMode(DATA1, INPUT);
+        pinMode(DATA0, INPUT);
+        pinMode(DATA1, INPUT);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(LED, OUTPUT);
-  pinMode(BEEP, OUTPUT);
-  pinMode(OPEN_CLOSE, OUTPUT);
+        pinMode(LED_BUILTIN, OUTPUT);
+        pinMode(LED, OUTPUT);
+        pinMode(BEEP, OUTPUT);
+        pinMode(OPEN_CLOSE, OUTPUT);
 
-  pinMode(RIEGEL, INPUT_PULLUP);
-  pinMode(KLINKE, INPUT_PULLUP);
+        pinMode(RIEGEL, INPUT_PULLUP);
+        pinMode(KLINKE, INPUT_PULLUP);
 
-  digitalWrite(OPEN_CLOSE, false);
-  digitalWrite(BEEP, true);
-  digitalWrite(LED, true);
+        digitalWrite(OPEN_CLOSE, false);
+        digitalWrite(BEEP, true);
+        digitalWrite(LED, true);
 
-  runner.init();
-  runner.addTask(t1);
-  runner.addTask(t2);
-  runner.addTask(t3);
-  runner.addTask(t4);
+        runner.init();
+        runner.addTask(t1);
+        runner.addTask(t2);
+        runner.addTask(t3);
+        runner.addTask(t4);
 
-  t1.enable();  // start cyclic readout of reader
-  t3.enable();  // start cyclic readout of door status
+        t1.enable(); // start cyclic readout of reader
+        t3.enable(); // start cyclic readout of door status
 }
 
 // Functions following -------------------------------------------------
@@ -72,114 +72,114 @@ void setup() {
 // START of Tasks
 
 void t1Callback() {
-  if (wg.available())  {                // check for data on Wiegand Bus
-   if (wg.getCode() < 1000) return;     // exclude strange "5" detection
-   t1.disable();  // Stop task
-   Serial.println((String)"card;" + wg.getCode());
-   t1.enableDelayed(5 * SECONDS);       // RFID Reader sleeping for x seconds
-   // eventually enable by RASPI?
-  }
- }
+        if (wg.available())  {          // check for data on Wiegand Bus
+                if (wg.getCode() < 1000) return; // exclude strange "5" detection
+                t1.disable(); // Stop task
+                Serial.println((String)"card;" + wg.getCode());
+                t1.enableDelayed(5 * SECONDS); // RFID Reader sleeping for x seconds
+                // eventually enable by RASPI?
+        }
+}
 
 void t3Callback() {
-  byte a = digitalRead(RIEGEL);
-  byte b = digitalRead(KLINKE);
+        byte a = digitalRead(RIEGEL);
+        byte b = digitalRead(KLINKE);
 
-  if(a != ahis) {
-    ahis = a;
-    Serial.println((String)"door;" + a);
-    }
+        if(a != ahis) {
+                ahis = a;
+                Serial.println((String)"door;" + a);
+        }
 }
 // END of Tasks
 
 void LOCK_DOOR(void) {              // Lock Door
-  digitalWrite(OPEN_CLOSE, false);
-  digitalWrite(LED, true);
+        digitalWrite(OPEN_CLOSE, false);
+        digitalWrite(LED, true);
 }
 
 void UNLOCK_DOOR(void) {            // Unlock Door for 'SEC_OPEN' seconds
-  digitalWrite(OPEN_CLOSE, true);
-  digitalWrite(LED, false);
-  t2.restartDelayed(SEC_OPEN * SECONDS);  // start task in 5 sec to close door
-  }
+        digitalWrite(OPEN_CLOSE, true);
+        digitalWrite(LED, false);
+        t2.restartDelayed(SEC_OPEN * SECONDS); // start task in 5 sec to close door
+}
 
 void RESTART_READER(void) {
-  t1.enable();
+        t1.enable();
 }
 
 void LED_BEEP() {
-  digitalWrite(BEEP, false);
-  t4.setCallback(&LED_BEEP2);
-  t4.restartDelayed(200);
+        digitalWrite(BEEP, false);
+        t4.setCallback(&LED_BEEP2);
+        t4.restartDelayed(200);
 }
 void LED_BEEP2() {
-  digitalWrite(BEEP, true);
-  t4.setCallback(&LED_BEEP3);
-  t4.restartDelayed(100);
+        digitalWrite(BEEP, true);
+        t4.setCallback(&LED_BEEP3);
+        t4.restartDelayed(100);
 }
 void LED_BEEP3() {
-  t4.setCallback(&LED_BEEP);
+        t4.setCallback(&LED_BEEP);
 }
 
 void LED_2TBEEP() {
-  digitalWrite(BEEP, false);
-  t4.setCallback(&LED_2TBEEP2);
-  t4.restartDelayed(200);
+        digitalWrite(BEEP, false);
+        t4.setCallback(&LED_2TBEEP2);
+        t4.restartDelayed(200);
 }
 
 void LED_2TBEEP2() {
-  digitalWrite(BEEP, true);
-  t4.setCallback(&LED_BEEP);
-  t4.restartDelayed(100);
+        digitalWrite(BEEP, true);
+        t4.setCallback(&LED_BEEP);
+        t4.restartDelayed(100);
 }
 
 void LED_3TBEEP() {
-  digitalWrite(BEEP, false);
-  t4.setCallback(&LED_3TBEEP2);
-  t4.restartDelayed(200);
+        digitalWrite(BEEP, false);
+        t4.setCallback(&LED_3TBEEP2);
+        t4.restartDelayed(200);
 }
 
 void LED_3TBEEP2() {
-  digitalWrite(BEEP, true);
-  t4.setCallback(&LED_2TBEEP);
-  t4.restartDelayed(100);
+        digitalWrite(BEEP, true);
+        t4.setCallback(&LED_2TBEEP);
+        t4.restartDelayed(100);
 }
 
 void evalSerialData() {
-  if ((buffer[0] == '>') && (buffer[2] == '<')) {
-    switch (buffer[1]) {
-      case 'a': // UNLOCK '>a<'
-      case 'A': // UNLOCK
-        UNLOCK_DOOR();
-        break;
-      case 'b': // BEEP1  '>b<'
-      case 'B': // BEEP1
-        t4.setCallback(&LED_BEEP);
-        t4.restart();
-        break;
-      case 'c': // BEEP2  '>c<'
-      case 'C': // BEEP2
-        t4.setCallback(&LED_2TBEEP);
-        t4.restart();
-        break;
-      case 'd': // BEEP3  '>d<'
-      case 'D': // BEEP3
-        t4.setCallback(&LED_3TBEEP);
-        t4.restart();
-        break;
-    }
-  }
-  bufferCount = 0;
+        if ((buffer[0] == '>') && (buffer[2] == '<')) {
+                switch (buffer[1]) {
+                case 'a': // UNLOCK '>a<'
+                case 'A': // UNLOCK
+                        UNLOCK_DOOR();
+                        break;
+                case 'b': // BEEP1  '>b<'
+                case 'B': // BEEP1
+                        t4.setCallback(&LED_BEEP);
+                        t4.restart();
+                        break;
+                case 'c': // BEEP2  '>c<'
+                case 'C': // BEEP2
+                        t4.setCallback(&LED_2TBEEP);
+                        t4.restart();
+                        break;
+                case 'd': // BEEP3  '>d<'
+                case 'D': // BEEP3
+                        t4.setCallback(&LED_3TBEEP);
+                        t4.restart();
+                        break;
+                }
+        }
+        bufferCount = 0;
 }
 
 void loop() {
-  runner.execute();
+        runner.execute();
 }
-  void serialEvent() {
-    char ch = (char)Serial.read();
-    buffer[bufferCount] = ch;
-    bufferCount++;
-    if (ch == '\x0d') {
-      evalSerialData();
-    }
+void serialEvent() {
+        char ch = (char)Serial.read();
+        buffer[bufferCount] = ch;
+        bufferCount++;
+        if (ch == '\x0d') {
+                evalSerialData();
+        }
 }
