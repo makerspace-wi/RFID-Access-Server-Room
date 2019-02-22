@@ -41,7 +41,7 @@ char buffer[10];    // Serial Input-Buffer
 void setup() {
   Serial.begin(9600);
   wg.begin();   // start Wiegand Bus Control
-  
+
   pinMode(DATA0, INPUT);
   pinMode(DATA1, INPUT);
 
@@ -56,7 +56,7 @@ void setup() {
   digitalWrite(OPEN_CLOSE, false);
   digitalWrite(BEEP, true);
   digitalWrite(LED, true);
-  
+
   runner.init();
   runner.addTask(t1);
   runner.addTask(t2);
@@ -74,16 +74,16 @@ void setup() {
 void t1Callback() {
   if (wg.available())  {                // check for data on Wiegand Bus
    if (wg.getCode() < 1000) return;     // exclude strange "5" detection
-   t1.disable();  // Stop task 
-   Serial.println((String)"card;" + wg.getCode());           
+   t1.disable();  // Stop task
+   Serial.println((String)"card;" + wg.getCode());
    t1.enableDelayed(5 * SECONDS);       // RFID Reader sleeping for x seconds
    // eventually enable by RASPI?
-  }    
+  }
  }
 
 void t3Callback() {
-  byte a = digitalRead(RIEGEL); 
-  byte b = digitalRead(KLINKE);  
+  byte a = digitalRead(RIEGEL);
+  byte b = digitalRead(KLINKE);
 
   if(a != ahis) {
     ahis = a;
@@ -101,7 +101,7 @@ void UNLOCK_DOOR(void) {            // Unlock Door for 'SEC_OPEN' seconds
   digitalWrite(OPEN_CLOSE, true);
   digitalWrite(LED, false);
   t2.restartDelayed(SEC_OPEN * SECONDS);  // start task in 5 sec to close door
-  } 
+  }
 
 void RESTART_READER(void) {
   t1.enable();
@@ -161,12 +161,12 @@ void evalSerialData() {
       case 'C': // BEEP2
         t4.setCallback(&LED_2TBEEP);
         t4.restart();
-        break;  
+        break;
       case 'd': // BEEP3  '>d<'
       case 'D': // BEEP3
         t4.setCallback(&LED_3TBEEP);
         t4.restart();
-        break;       
+        break;
     }
   }
   bufferCount = 0;
