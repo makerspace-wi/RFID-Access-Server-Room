@@ -35,14 +35,14 @@ void t3Callback();
 void lock_door();
 void led_beep1_0();
 
+WIEGAND wg;
+Scheduler runner;
+
 //Tasks
 Task t1(500, TASK_FOREVER, &t1Callback, &runner, true); // task checking the RFID-Reader
 Task t2(100, TASK_ONCE, &lock_door, &runner, false);      // task to lock the door again
 Task t3(250, TASK_FOREVER, &t3Callback, &runner, true);  // check door contacts status
 Task t4(1,TASK_ONCE, &led_beep1_0, &runner, false);          // task for Reader beeper
-
-WIEGAND wg;
-Scheduler runner;
 
 // VARIABLES
 bool ahis = true; // Riegel history value
