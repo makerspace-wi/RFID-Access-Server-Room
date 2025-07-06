@@ -36,10 +36,10 @@ void lock_door();
 void led_beep1_0();
 
 //Tasks
-Task t1(500, TASK_FOREVER, &t1Callback); // task checking the RFID-Reader
-Task t2(100, TASK_ONCE, &lock_door);      // task to lock the door again
-Task t3(250, TASK_FOREVER, &t3Callback);  // check door contacts status
-Task t4(1,TASK_ONCE, &led_beep1_0);          // task for Reader beeper
+Task t1(500, TASK_FOREVER, &t1Callback, &runner, true); // task checking the RFID-Reader
+Task t2(100, TASK_ONCE, &lock_door, &runner, false);      // task to lock the door again
+Task t3(250, TASK_FOREVER, &t3Callback, &runner, true);  // check door contacts status
+Task t4(1,TASK_ONCE, &led_beep1_0, &runner, false);          // task for Reader beeper
 
 WIEGAND wg;
 Scheduler runner;
@@ -136,14 +136,8 @@ void setup() {
   Ethernet.begin(mac, ip);
   delay(1500);
 
-  runner.init();
-  runner.addTask(t1);
-  runner.addTask(t2);
-  runner.addTask(t3);
-  runner.addTask(t4);
+  runner.startNow();
 
-  t1.enable(); // start cyclic readout of reader
-  t3.enable(); // start cyclic readout of door status
 }
 
 // Functions following -------------------------------------------------
