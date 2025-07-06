@@ -4,6 +4,8 @@
 #include <Ethernet.h>
 #include <PubSubClient.h>
 
+#define DEBUG 1
+
 #define SEC_OPEN 10        // number of seconds to hold door open after valid UID
 #define SECONDS 1000      // multiplier for second
 
@@ -19,15 +21,26 @@
 #define KLINKE 6       // input - sense contacts within lock
 
 #define MQTT_NAME "Serverroom_Access"
-#define MQTT_TOPIC_CARD "/serverroom/card" // to Server
-#define MQTT_TOPIC_DOOR "/serverroom/door" // to Server
-#define MQTT_TOPIC_UNLOCK "/serverroom/unlock" // from Server, payload: 1 = Unlock
-#define MQTT_TOPIC_BEEP "/serverroom/beep" // from Server, payload: 1 = Beep 1, 2 = Beep 2, 3 = Beep 3
+#define MQTT_TOPIC_STATUS_ONLINE "serverroom/status/online" // to Server, payload: 1
+#define MQTT_TOPIC_CARD "serverroom/card" // to Server
+#define MQTT_TOPIC_DOOR "serverroom/door" // to Server
+#define MQTT_TOPIC_UNLOCK "serverroom/unlock" // from Server, payload: 1 = Unlock
+#define MQTT_TOPIC_BEEP "serverroom/beep" // from Server, payload: 1 = Beep 1, 2 = Beep 2, 3 = Beep 3
 
 // TODO: Anpassen
-byte mac[] = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xED };
-IPAddress ip(172, 16, 0, 100);
-IPAddress server(172, 16, 0, 2);
+byte mac[] = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xA0 };
+IPAddress ip(192, 168, 100, 11);
+IPAddress server(192, 168, 100, 10);
+uint16_t server_port = 1884;
+
+
+#if DEBUG
+  #define DEBUG_PRINT(x)  Serial.print(x)
+  #define DEBUG_PRINTLN(x) Serial.println(x)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTLN(x)
+#endif
 
 // Callback methods prototypes
 void t1Callback();
@@ -52,6 +65,25 @@ byte dshis = true; // door status history value
 EthernetClient ethClient;
 PubSubClient client(ethClient);
 
+void digitalWriteBeep(bool state) {
+  DEBUG_PRINT("digitalWrite BEEP: ");
+  DEBUG_PRINTLN(state);
+  digitalWrite(BEEP, state);
+}
+
+void digitalWriteLed(bool state) {
+  DEBUG_PRINT("digitalWrite LED: ");
+  DEBUG_PRINTLN(state);
+  digitalWrite(LED, state);
+}
+
+void digitalWriteOpenClose(bool state) {
+  DEBUG_PRINT("digitalWrite OPEN_CLOSE: ");
+  DEBUG_PRINTLN(state);
+  digitalWrite(OPEN_CLOSE, state);
+  digitalWrite(LED_BUILTIN, state);
+}
+
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("MQTT Message arrived [");
   Serial.print(topic);
@@ -63,24 +95,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
 
   if (strcmp(topic, MQTT_TOPIC_UNLOCK) == 0) {
-    if (payload[0] == 1) {
+    if (payload[0] == '1') {
         unlock_door();
     }
   } else if (strcmp(topic, MQTT_TOPIC_BEEP) == 0) {
     switch (payload[0]) {
-      case 1:
+      case '1':
           Serial.println("Starting Beep 1");
           t4.setCallback(&led_beep1_0);
           t4.restart();
         break;
 
-      case 2:
+      case '2':
           Serial.println("Starting Beep 2");
           t4.setCallback(&led_beep2_0);
           t4.restart();
         break;
 
-      case 3:
+      case '3':
           Serial.println("Starting Beep 3");
           t4.setCallback(&led_beep3_0);
           t4.restart();
@@ -97,7 +129,10 @@ void reconnect() {
     if (client.connect(MQTT_NAME)) {
       Serial.println("Connected to MQTT Server");
       
-      client.subscribe("inTopic");
+      client.subscribe(MQTT_TOPIC_UNLOCK);
+      client.subscribe(MQTT_TOPIC_BEEP);
+
+      client.publish(MQTT_TOPIC_STATUS_ONLINE, "1");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -123,14 +158,14 @@ void setup() {
   pinMode(RIEGEL, INPUT_PULLUP);
   pinMode(KLINKE, INPUT_PULLUP);
 
-  digitalWrite(OPEN_CLOSE, false);
-  digitalWrite(BEEP, true);
-  digitalWrite(LED, true);
+  digitalWriteOpenClose(false);
+  digitalWriteBeep(true);
+  digitalWriteLed(true);
 
   Ethernet.init(17);  // WIZnet W5100S-EVB-Pico W5500-EVB-Pico W6100-EVB-Pico
 
 
-  client.setServer(server, 1883);
+  client.setServer(server, server_port);
   client.setCallback(callback);
 
   Ethernet.begin(mac, ip);
@@ -176,14 +211,14 @@ void t3Callback() {
 
 void lock_door(void) {              // Lock Door
   Serial.println("Locking door");
-  digitalWrite(OPEN_CLOSE, false);
-  digitalWrite(LED, true);
+  digitalWriteOpenClose(false);
+  digitalWriteLed(true);
 }
 
 void unlock_door(void) {            // Unlock Door for 'SEC_OPEN' seconds
   Serial.println("Unlocking door");
-  digitalWrite(OPEN_CLOSE, true);
-  digitalWrite(LED, false);
+  digitalWriteOpenClose(true);
+  digitalWriteLed(false);
   t2.restartDelayed(SEC_OPEN * SECONDS); // start task in 5 sec to close door
 }
 
@@ -192,12 +227,12 @@ void restart_reader(void) {
 }
 
 void led_beep1_0() {
-  digitalWrite(BEEP, false);
+  digitalWriteBeep(false);
   t4.setCallback(&led_beep1_1);
   t4.restartDelayed(200);
 }
 void led_beep1_1() {
-  digitalWrite(BEEP, true);
+  digitalWriteBeep(true);
   t4.setCallback(&led_beep1_2);
   t4.restartDelayed(100);
 }
@@ -207,25 +242,25 @@ void led_beep1_2() {
 
 
 void led_beep2_0() {
-  digitalWrite(BEEP, false);
+  digitalWriteBeep(false);
   t4.setCallback(&led_beep2_1);
   t4.restartDelayed(200);
 }
 
 void led_beep2_1() {
-  digitalWrite(BEEP, true);
+  digitalWriteBeep(true);
   t4.setCallback(&led_beep1_0);
   t4.restartDelayed(100);
 }
 
 void led_beep3_0() {
-  digitalWrite(BEEP, false);
+  digitalWriteBeep(false);
   t4.setCallback(&led_beep3_1);
   t4.restartDelayed(200);
 }
 
 void led_beep3_1() {
-  digitalWrite(BEEP, true);
+  digitalWriteBeep(true);
   t4.setCallback(&led_beep2_0);
   t4.restartDelayed(100);
 }
