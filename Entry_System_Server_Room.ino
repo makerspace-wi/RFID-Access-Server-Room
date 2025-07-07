@@ -30,8 +30,8 @@
 // TODO: Anpassen
 byte mac[] = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xA0 };
 IPAddress ip(192, 168, 100, 11);
-IPAddress server(192, 168, 100, 10);
-uint16_t server_port = 1884;
+IPAddress server(192, 168, 100, 251);
+uint16_t server_port = 1885;
 
 
 #if DEBUG
@@ -45,6 +45,7 @@ uint16_t server_port = 1884;
 // Callback methods prototypes
 void t1Callback();
 void t3Callback();
+void t5Callback();
 void lock_door();
 void led_beep1_0();
 
@@ -56,6 +57,7 @@ Task t1(500, TASK_FOREVER, &t1Callback, &runner, true); // task checking the RFI
 Task t2(100, TASK_ONCE, &lock_door, &runner, false);      // task to lock the door again
 Task t3(250, TASK_FOREVER, &t3Callback, &runner, true);  // check door contacts status
 Task t4(1,TASK_ONCE, &led_beep1_0, &runner, false);          // task for Reader beeper
+Task t5(10000, TASK_FOREVER, &t5Callback, &runner, true);  // online ping
 
 // VARIABLES
 bool ahis = true; // Riegel history value
@@ -121,6 +123,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
+void ping() {
+  client.publish(MQTT_TOPIC_STATUS_ONLINE, "1");
+}
+
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -132,7 +138,7 @@ void reconnect() {
       client.subscribe(MQTT_TOPIC_UNLOCK);
       client.subscribe(MQTT_TOPIC_BEEP);
 
-      client.publish(MQTT_TOPIC_STATUS_ONLINE, "1");
+      ping();
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -207,6 +213,11 @@ void t3Callback() {
     client.publish(MQTT_TOPIC_DOOR, (a ? "1" : "0"));
   }
 }
+
+void t5Callback() {
+  ping();
+}
+
 // END of Tasks
 
 void lock_door(void) {              // Lock Door
