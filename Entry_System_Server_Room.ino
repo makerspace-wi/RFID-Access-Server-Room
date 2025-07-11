@@ -151,7 +151,7 @@ void reconnect() {
 
 void setup() {
   Serial.begin(9600);
-  wg.begin(); // start Wiegand Bus Control
+  wg.begin(DATA0, DATA1); // start Wiegand Bus Control
 
   pinMode(DATA0, INPUT);
   pinMode(DATA1, INPUT);
@@ -187,20 +187,20 @@ void setup() {
 
 void t1Callback() {
   if (wg.available())  {          // check for data on Wiegand Bus
-      if (wg.getCode() < 1000) return; // exclude strange "5" detection
-      t1.disable(); // Stop task
+    if (wg.getCode() < 1000) return; // exclude strange "5" detection
+    t1.disable(); // Stop task
 
-      unsigned long code = wg.getCode();
+    unsigned long code = wg.getCode();
 
-      Serial.print("Read Card: ");
-      Serial.println(code);
+    Serial.print("Read Card: ");
+    Serial.println(code);
 
-      char payload[32];
-      sprintf(payload, "%lu", code);
-      client.publish(MQTT_TOPIC_CARD, payload);
+    char payload[32];
+    sprintf(payload, "%lu", code);
+    client.publish(MQTT_TOPIC_CARD, payload);
 
-      t1.enableDelayed(5 * SECONDS); // RFID Reader sleeping for x seconds
-      // eventually enable by RASPI?
+    t1.enableDelayed(5 * SECONDS); // RFID Reader sleeping for x seconds
+    // eventually enable by RASPI?
   }
 }
 
