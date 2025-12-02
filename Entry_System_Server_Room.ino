@@ -3,6 +3,8 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#define OTETHERNET
+#include <ArduinoOTA.h>
 
 #define DEBUG 1
 
@@ -13,8 +15,8 @@
 
 #define DATA0 12       // input - Wiegand Data 0
 #define DATA1 11       // input - Wiegand Data 1
-#define LED 9          // output - LED changes to green if LOW
-#define BEEP 8         // output - peep sound on if LOW
+#define LED 8          // output - LED changes to green if LOW
+#define BEEP 9         // output - peep sound on if LOW
 
 #define OPEN_CLOSE 10  // output - opens lock as long as HIGH
 #define RIEGEL 7       // input - sense contacts within lock --> FOCUS
@@ -30,6 +32,9 @@
 // TODO: Anpassen
 byte mac[] = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xA0 };
 IPAddress ip(192, 168, 100, 11);
+IPAddress netmask(255, 255, 255, 0);
+IPAddress dns(192, 168, 100, 1);
+IPAddress gateway(192, 168, 100, 1);
 IPAddress server(192, 168, 100, 251);
 uint16_t server_port = 1885;
 
@@ -76,7 +81,7 @@ void digitalWriteBeep(bool state) {
 void digitalWriteLed(bool state) {
   DEBUG_PRINT("digitalWrite LED: ");
   DEBUG_PRINTLN(state);
-  digitalWrite(LED, state);
+  digitalWrite(LED, !state);
 }
 
 void digitalWriteOpenClose(bool state) {
@@ -132,7 +137,7 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (client.connect(MQTT_NAME)) {
+    if (client.connect(MQTT_NAME, MQTT_TOPIC_STATUS_ONLINE, 1, true, "0")) {
       Serial.println("Connected to MQTT Server");
       
       client.subscribe(MQTT_TOPIC_UNLOCK);
@@ -174,11 +179,13 @@ void setup() {
   client.setServer(server, server_port);
   client.setCallback(callback);
 
-  Ethernet.begin(mac, ip);
+  Ethernet.begin(mac, ip, dns, gateway, netmask);
   delay(1500);
 
-  runner.startNow();
+  // start the OTEthernet library with internal (flash) based storage
+  ArduinoOTA.begin(Ethernet.localIP(), "Serverraum-Zugang", "", InternalStorage);
 
+  runner.startNow();
 }
 
 // Functions following -------------------------------------------------
@@ -191,12 +198,15 @@ void t1Callback() {
     t1.disable(); // Stop task
 
     unsigned long code = wg.getCode();
+    int wgType = wg.getWiegandType();
 
     Serial.print("Read Card: ");
-    Serial.println(code);
+    Serial.print(code);
+    Serial.print(", Wiegand Type: ");
+    Serial.println(wgType);
 
     char payload[32];
-    sprintf(payload, "%lu", code);
+    sprintf(payload, "%lu;%d", code, wgType);
     client.publish(MQTT_TOPIC_CARD, payload);
 
     t1.enableDelayed(5 * SECONDS); // RFID Reader sleeping for x seconds
@@ -284,4 +294,6 @@ void loop() {
   client.loop();
 
   runner.execute();
+
+  ArduinoOTA.poll();
 }
