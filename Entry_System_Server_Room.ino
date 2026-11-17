@@ -58,7 +58,7 @@ WIEGAND wg;
 Scheduler runner;
 
 //Tasks
-Task t1(500, TASK_FOREVER, &t1Callback, &runner, true); // task checking the RFID-Reader
+Task t1(50, TASK_FOREVER, &t1Callback, &runner, true); // task checking the RFID-Reader (50 ms for low latency)
 Task t2(100, TASK_ONCE, &lock_door, &runner, false);      // task to lock the door again
 Task t3(250, TASK_FOREVER, &t3Callback, &runner, true);  // check door contacts status
 Task t4(1,TASK_ONCE, &led_beep1_0, &runner, false);          // task for Reader beeper
@@ -68,6 +68,7 @@ Task t5(10000, TASK_FOREVER, &t5Callback, &runner, true);  // online ping
 bool ahis = true; // Riegel history value
 bool bhis = true; // Klinke history value
 byte dshis = true; // door status history value
+unsigned long lastCardMs = 0; // timestamp of last published card (cooldown for repeated reads)
 
 EthernetClient ethClient;
 PubSubClient client(ethClient);
@@ -133,24 +134,25 @@ void ping() {
 }
 
 void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect(MQTT_NAME, MQTT_TOPIC_STATUS_ONLINE, 1, true, "0")) {
-      Serial.println("Connected to MQTT Server");
-      
-      client.subscribe(MQTT_TOPIC_UNLOCK);
-      client.subscribe(MQTT_TOPIC_BEEP);
+  // Non-blocking reconnect: try at most every 5 seconds and NEVER block the
+  // task scheduler. The former while()/delay(5000) loop froze all tasks
+  // (card reads, door contacts) whenever the broker was unreachable.
+  static unsigned long lastAttempt = 0;
+  if (millis() - lastAttempt < 5000) return;
+  lastAttempt = millis();
 
-      ping();
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
+  Serial.print("Attempting MQTT connection...");
+  // Attempt to connect
+  if (client.connect(MQTT_NAME, MQTT_TOPIC_STATUS_ONLINE, 1, true, "0")) {
+    Serial.println("Connected to MQTT Server");
+
+    client.subscribe(MQTT_TOPIC_UNLOCK);
+    client.subscribe(MQTT_TOPIC_BEEP);
+
+    ping();
+  } else {
+    Serial.print("failed, rc=");
+    Serial.println(client.state());
   }
 }
 
@@ -194,10 +196,20 @@ void setup() {
 
 void t1Callback() {
   if (wg.available())  {          // check for data on Wiegand Bus
-    if (wg.getCode() < 1000) return; // exclude strange "5" detection
-    t1.disable(); // Stop task
-
     unsigned long code = wg.getCode();
+    if (code < 1000) return; // exclude strange "5" detection
+
+    // Discard repeated reads within the cooldown window instead of holding
+    // them back. The former approach (disable task + enableDelayed(5 s))
+    // buffered every card read inside the window and only published it after
+    // the full 5 s sleep - a chip presented shortly after the previous one
+    // (e.g. Einweiser chip followed by Teilnehmer chip) arrived seconds late.
+    // Symcon handles duplicate handling anyway (2 s dedup in the Einweisung
+    // flow, gate times in the door logic), so a short discard window here is
+    // sufficient.
+    if (millis() - lastCardMs < 1500) return;
+    lastCardMs = millis();
+
     int wgType = wg.getWiegandType();
 
     Serial.print("Read Card: ");
@@ -208,9 +220,6 @@ void t1Callback() {
     char payload[32];
     sprintf(payload, "%lu;%d", code, wgType);
     client.publish(MQTT_TOPIC_CARD, payload);
-
-    t1.enableDelayed(5 * SECONDS); // RFID Reader sleeping for x seconds
-    // eventually enable by RASPI?
   }
 }
 
