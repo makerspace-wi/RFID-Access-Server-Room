@@ -69,14 +69,18 @@ bool ahis = true; // Riegel history value
 bool bhis = true; // Klinke history value
 byte dshis = true; // door status history value
 unsigned long lastCardMs = 0; // timestamp of last published card (cooldown for repeated reads)
+unsigned long beepMuteUntilMs = 0; // suppress beep messages received right after (re)connect (retained echo)
 
 EthernetClient ethClient;
 PubSubClient client(ethClient);
 
 void digitalWriteBeep(bool state) {
+  // state=true -> beep off, state=false -> beep on (Semantik der Aufrufe bleibt unveraendert).
+  // Der verbaute Buzzer ist aktiv-HIGH: Ton bei HIGH, Stille bei LOW.
+  // Das alte Code-Kommentar "peep sound on if LOW" war invertiert.
   DEBUG_PRINT("digitalWrite BEEP: ");
   DEBUG_PRINTLN(state);
-  digitalWrite(BEEP, state);
+  digitalWrite(BEEP, !state);
 }
 
 void digitalWriteLed(bool state) {
@@ -107,6 +111,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
         unlock_door();
     }
   } else if (strcmp(topic, MQTT_TOPIC_BEEP) == 0) {
+    if (millis() < beepMuteUntilMs) {   // retained echo right after (re)connect - ignore
+      Serial.println("Beep message ignored (retained echo after connect)");
+      return;
+    }
     switch (payload[0]) {
       case '1':
           Serial.println("Starting Beep 1");
@@ -148,6 +156,7 @@ void reconnect() {
 
     client.subscribe(MQTT_TOPIC_UNLOCK);
     client.subscribe(MQTT_TOPIC_BEEP);
+    beepMuteUntilMs = millis() + 2000; // ignore retained beep messages right after (re)connect
 
     ping();
   } else {
